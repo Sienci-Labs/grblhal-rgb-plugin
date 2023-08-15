@@ -157,7 +157,7 @@ typedef struct { // Structure to store current and previous condition status for
 
 // Accessed as CONDITIONS[ST_ILIGHT].curr for the current value, .prev for the previous
 static STATUS_LIST CONDITIONS[16] = {
-        { ST_INIT,      RGB_OFF,        0, 0},     // ST INIT [0]
+        { ST_INIT,      RGB_WHITE,        0, 0},     // ST INIT [0]
         { ST_ILIGHT,    RGB_WHITE,      0, 0},     // ST_ILGHT [1]
         { ST_SPINDLE,   RGB_RED,        0, 0},     // ST_SPINDLE [2]
         { ST_FLOOD,     RGB_MAGENTA,    0, 0},     // ST_FLOOD [3]
@@ -989,6 +989,7 @@ static void onProgramCompleted (program_flow_t program_flow, bool check_mode)
         rgb_set_led(RGB_OFF);    
         rgb_set_lstate(RGB_CFLAG);
         hal.delay_ms(150, NULL);
+        rgb_set_led(RGB_IDLE); 
         cf_cycle++;
     }
     current_state = state_get();   
@@ -1020,16 +1021,16 @@ void status_light_init() {
     // CLAIM AUX OUTPUTS FOR RGB LIGHT RELAYS
     if(hal.port.num_digital_out >= 3) {
 
-        hal.port.num_digital_out -= 3;  // Remove the our outputs from the list of available outputs
-        base_port_out = hal.port.num_digital_out;
+        //hal.port.num_digital_out -= 3;  // Remove the our outputs from the list of available outputs
+        base_port_out = 0;
 
         if(hal.port.set_pin_description) {  // Viewable from $PINS command in MDI / Console
             uint32_t idx_out = 0;
             do {
                 hal.port.set_pin_description(true, true, base_port_out + idx_out, rgb_aux_out[idx_out]);
-                if      (idx_out == 0) { red_port = idx_out; }
-                else if (idx_out == 1) { green_port = idx_out; } // NOTE - Fixed incorrect order (Blue was incorrectly here until Oct 21, 2021)
-                else if (idx_out == 2) { blue_port = idx_out; }
+                if      (idx_out == 0) { red_port = base_port_out + idx_out; }
+                else if (idx_out == 1) { green_port = base_port_out + idx_out; } // NOTE - Fixed incorrect order (Blue was incorrectly here until Oct 21, 2021)
+                else if (idx_out == 2) { blue_port = base_port_out + idx_out; }
                 idx_out++;                
             } while(idx_out <= 2);
         //}
