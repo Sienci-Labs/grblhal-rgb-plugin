@@ -1,22 +1,13 @@
 #include <stdint.h>
+#include "driver.h"
+#include "grbl/hal.h"
+
+#include "ws2812.h"
 
 #define FRAME_SIZE 24
 #define OFF 0
 #define GLOBAL 1
 #define PER_PIXEL 2
-
-typedef struct {
-    int size;
-    int* transmitBuf;
-    int use_II;
-    uint8_t II;
-    int outPin;
-    int zeroHigh;
-    int zeroLow;
-    int oneHigh;
-    int oneLow;
-    int* gpo;
-} WS2812;
 
 void WS2812_setDelays(WS2812* ws2812, int zeroHigh, int zeroLow, int oneHigh, int oneLow) {
     ws2812->zeroHigh = zeroHigh;
@@ -75,33 +66,37 @@ void WS2812_write_offsets(WS2812* ws2812, int* buf, int r_offset, int g_offset, 
     // Entering timing critical section, so disabling interrupts
     // Assuming __disable_irq() and __enable_irq() are custom functions
     // that disable and enable interrupts respectively
-    __disable_irq();
+    //__disable_irq();
 
     for (i = 0; i < FRAME_SIZE * ws2812->size; i++) {
         j = 0;
         if (ws2812->transmitBuf[i]) {
+            //need to set the output high
             *(ws2812->gpo) = 1;
             for (; j < ws2812->oneHigh; j++) {
-                __nop();
+                __ASM volatile ("nop");
             }
+            //need to set the output low
             *(ws2812->gpo) = 0;
             for (; j < ws2812->oneLow; j++) {
-                __nop();
+                __ASM volatile ("nop");
             }
         } else {
+            //need to set the output high
             *(ws2812->gpo) = 1;
             for (; j < ws2812->zeroHigh; j++) {
-                __nop();
+                __ASM volatile ("nop");
             }
+            //need to set the output low
             *(ws2812->gpo) = 0;
             for (; j < ws2812->zeroLow; j++) {
-                __nop();
+                __ASM volatile ("nop");
             }
         }
     }
 
     // Exiting timing critical section, so enabling interrupts
-    __enable_irq();
+    //__enable_irq();
 }
 
 void WS2812_useII(WS2812* ws2812, int bc) {
