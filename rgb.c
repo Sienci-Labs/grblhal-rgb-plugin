@@ -12,6 +12,9 @@
 
   PrintNC - High Performance, Open Source, Steel Frame, CNC - https://wiki.printnc.info
 
+  Code modified for use with Sienci SuperLongBoard   
+  Copyright (c) 2023 Sienci Labs
+
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
@@ -43,23 +46,12 @@
 #include "grbl/alarms.h"
 #include "grbl/nuts_bolts.h"         // For delay_sec non-blocking timer function
 
+#include "rgb.h"
+#include "WS2812.h"
 
 // Declarations
 
 // Available RGB colors possible with just relays
-#define RGB_OFF     0 // All RGB Off
-#define RGB_RED     1 // Red
-#define RGB_GREEN   2 // Green
-#define RGB_BLUE    3 // Blue
-#define RGB_YELLOW  4 // Red + Green
-#define RGB_MAGENTA 5 // Red + Bue
-#define RGB_CYAN    6 // Green + Blue
-#define RGB_WHITE   7 // Red + Green + Blue
-
-// Blink times in ms
-#define RGB_SLOW    1000
-#define RGB_FAST    750
-#define RGB_PULSE   500
 
 // Override Lights - Inspection Light, Spindle On, Flood/Mist
 // States for state machine - *DO NOT CHANGE ORDER HERE*
@@ -104,11 +96,9 @@
 // Set preferred STATLE_IDLE light color, will be moving to a $ setting in future
 static uint8_t RGB_IDLE = RGB_WHITE;         // Some people prefer RGB_WHITE for the idle color
 static uint8_t inspection_light_on = 0;     // Indicates whether ILIGHT inspection light is on (1) or off (0)
-static uint8_t base_port_out;               // Calculated starting point for assigning Aux Outputs to our plugin
 static uint8_t base_port_in;                // Calculated starting point for assigning Aux Inputs to our plugin
-static uint8_t red_port;                    // Aux out connected to a relay controlling the ground line for RED in an LED strip
-static uint8_t green_port;                  // Aux out connected to a relay controlling the ground line for GREEN in an LED strip
-static uint8_t blue_port;                   // Aux out connected to a relay controlling the ground line for BLUE in an LED strip
+static uint8_t rail_port;                   // Aux out connected to RAIL
+static uint8_t ring_port;                   // Aux out connected to RING led strip
 static uint8_t ilight_button_port = 0;      // Aux in connected to button to turn inspection light on/off, fix when refactoring input selection code
 static uint8_t rgb_lstate = ST_NO_FLASH;    // Flag to track position in light flashing sequence
 static uint8_t rgb_precedence = -1;         // For tracking ILIGHT or SPINDLE assert as light override
@@ -352,9 +342,11 @@ void resolveOutputs() {
 // Debug function to directly set a color outside of the standard function so we can use with delay() like a printf for debug
 // Should add debug output to UART port for future debugging
 static void rgb_debug (uint8_t rgb_debug_color) {
-    hal.port.digital_out(red_port, RGB_MASKS[rgb_debug_color].R);
-    hal.port.digital_out(green_port, RGB_MASKS[rgb_debug_color].G);
-    hal.port.digital_out(blue_port, RGB_MASKS[rgb_debug_color].B);
+    //hal.port.digital_out(red_port, RGB_MASKS[rgb_debug_color].R);
+    //hal.port.digital_out(green_port, RGB_MASKS[rgb_debug_color].G);
+    //hal.port.digital_out(blue_port, RGB_MASKS[rgb_debug_color].B);
+
+
 }
 
 // Physically sets the requested RGB light combination.
@@ -363,9 +355,9 @@ static void rgb_set_led (uint8_t reqColor) {
     static uint8_t currColor = 99;
     if ( currColor != reqColor) {
         currColor = reqColor;
-        hal.port.digital_out(red_port, RGB_MASKS[reqColor].R);
-        hal.port.digital_out(green_port, RGB_MASKS[reqColor].G);
-        hal.port.digital_out(blue_port, RGB_MASKS[reqColor].B);
+        //hal.port.digital_out(red_port, RGB_MASKS[reqColor].R);
+        //hal.port.digital_out(green_port, RGB_MASKS[reqColor].G);
+        //hal.port.digital_out(blue_port, RGB_MASKS[reqColor].B);
         state_start_timestamp = hal.get_elapsed_ticks();        // Update start time for state
     }
 }
@@ -962,20 +954,6 @@ static void output_warning (uint_fast16_t state) // Sent if ports available < 3,
     report_message("Three output ports are required for the RGB plugin!", Message_Warning);
 }
 
-// Tell the user about which ports are used for the output - not sent anywhere yet
-// Is this needed since the info is in $PINS?  If so, add the new aux input details for ilight button & tool setter alarm
-static void output_port (uint_fast16_t state)
-{
-    char msg[30];
-
-    strcpy(msg, "R,G,B Ports: ");
-    strcat(msg, uitoa(red_port));
-    strcat(msg, uitoa(blue_port));
-    strcat(msg, uitoa(green_port));
-
-    report_message(msg, Message_Info);
-}
-
 // ON (Gcode) PROGRAM COMPLETION
 static void onProgramCompleted (program_flow_t program_flow, bool check_mode)
 {
@@ -1005,11 +983,6 @@ static void driverReset (void)
 {
     driver_reset();
 
-    uint32_t idx_out = 2; // Ports count start at 0
-    do {
-        hal.port.digital_out(base_port_out + --idx_out, false);
-    } while(idx_out);
-
     // Be aware that changing things here can lead to debugging challenges
     (inspection_light_on = 0);
 }
@@ -1018,21 +991,18 @@ static void driverReset (void)
 // void my_plugin_init() {
 void status_light_init() {
 
-    // CLAIM AUX OUTPUTS FOR RGB LIGHT RELAYS
-    if(hal.port.num_digital_out >= 3) {
+    // CLAIM AUX OUTPUTS FOR RGB LIGHT STRIPS
+    if(hal.port.num_digital_out >= 2) {
 
         //hal.port.num_digital_out -= 3;  // Remove the our outputs from the list of available outputs
-        base_port_out = 0;
 
         if(hal.port.set_pin_description) {  // Viewable from $PINS command in MDI / Console
-            uint32_t idx_out = 0;
-            do {
-                hal.port.set_pin_description(true, true, base_port_out + idx_out, rgb_aux_out[idx_out]);
-                if      (idx_out == 0) { red_port = base_port_out + idx_out; }
-                else if (idx_out == 1) { green_port = base_port_out + idx_out; } // NOTE - Fixed incorrect order (Blue was incorrectly here until Oct 21, 2021)
-                else if (idx_out == 2) { blue_port = base_port_out + idx_out; }
-                idx_out++;                
-            } while(idx_out <= 2);
+
+        ring_port = RING_LED_AUXOUT;
+        rail_port = RAIL_LED_AUXOUT;
+
+        hal.port.set_pin_description(true, true, ring_port, "RING NEOPIXEL PORT");
+        hal.port.set_pin_description(true, true, rail_port, "RAIL NEOPIXEL PORT");
         //}
 
     // CLAIM AUX INPUT FOR INSPECTION LIGHT BUTTON
