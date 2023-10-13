@@ -48,8 +48,20 @@
 
 #include "rgb.h"
 #include "WS2812.h"
+#include "PixelArray.h"
 
 // Declarations
+
+#define NUM_RING_PIXELS 1
+#define NUM_RAIL_PIXELS 1
+
+WS2812 ring_led;
+WS2812 rail_led;
+
+int ring_buf[NUM_RING_PIXELS];
+int rail_buf[NUM_RAIL_PIXELS];
+
+PixelArray* px;
 
 // Available RGB colors possible with just relays
 
@@ -96,7 +108,6 @@
 // Set preferred STATLE_IDLE light color, will be moving to a $ setting in future
 static uint8_t RGB_IDLE = RGB_WHITE;         // Some people prefer RGB_WHITE for the idle color
 static uint8_t inspection_light_on = 0;     // Indicates whether ILIGHT inspection light is on (1) or off (0)
-static uint8_t base_port_in;                // Calculated starting point for assigning Aux Inputs to our plugin
 static uint8_t rail_port;                   // Aux out connected to RAIL
 static uint8_t ring_port;                   // Aux out connected to RING led strip
 static uint8_t ilight_button_port = 0;      // Aux in connected to button to turn inspection light on/off, fix when refactoring input selection code
@@ -353,11 +364,13 @@ static void rgb_debug (uint8_t rgb_debug_color) {
 // Always sets all three LEDs to avoid unintended light combinations
 static void rgb_set_led (uint8_t reqColor) { 
     static uint8_t currColor = 99;
+    int neocolor, numpixels = 1;
     if ( currColor != reqColor) {
         currColor = reqColor;
-        //hal.port.digital_out(red_port, RGB_MASKS[reqColor].R);
-        //hal.port.digital_out(green_port, RGB_MASKS[reqColor].G);
-        //hal.port.digital_out(blue_port, RGB_MASKS[reqColor].B);
+        //WS2812_write(&ring_led, PixelArray_getBuf(px));
+        neocolor = 0x000005;
+        WS2812_write_simple(&rail_led, neocolor);   
+
         state_start_timestamp = hal.get_elapsed_ticks();        // Update start time for state
     }
 }
@@ -994,16 +1007,22 @@ void status_light_init() {
     // CLAIM AUX OUTPUTS FOR RGB LIGHT STRIPS
     if(hal.port.num_digital_out >= 2) {
 
-        //hal.port.num_digital_out -= 3;  // Remove the our outputs from the list of available outputs
-
         if(hal.port.set_pin_description) {  // Viewable from $PINS command in MDI / Console
 
-        ring_port = RING_LED_AUXOUT;
+        //ring_port = RING_LED_AUXOUT;
         rail_port = RAIL_LED_AUXOUT;
 
-        hal.port.set_pin_description(true, true, ring_port, "RING NEOPIXEL PORT");
-        hal.port.set_pin_description(true, true, rail_port, "RAIL NEOPIXEL PORT");
-        //}
+        //ioport_claim(Port_Digital, Port_Output, &ring_port, "RING NEOPIXEL PORT");
+        ioport_claim(Port_Digital, Port_Output, &rail_port, "RAIL NEOPIXEL PORT");
+
+        px = PixelArray_create(NUM_RING_PIXELS);
+
+        rail_led.gpo = rail_port;
+        rail_led.size = NUM_RAIL_PIXELS;
+        WS2812_setDelays(&rail_led, 0, 5, 10, 5);
+        //ring_led.gpo = ring_port;
+        //ring_led.size = NUM_RING_PIXELS;
+        //WS2812_setDelays(&rail_led, 10, 10, 1, 1); 
 
     // CLAIM AUX INPUT FOR INSPECTION LIGHT BUTTON
     /*if(hal.port.num_digital_in >= 2) {
