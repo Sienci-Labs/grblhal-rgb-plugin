@@ -43,7 +43,8 @@
 #define RGB_MAGENTA 5 // Red + Bue
 #define RGB_CYAN    6 // Green + Blue
 #define RGB_WHITE   7 // Red + Green + Blue
-#define RBG_ORANGE  8 // Red + Green + More Red
+#define RGB_ORANGE  8 // Red + Green + More Red
+#define RGB_GREY    9 // Red + Green + Blue but dimmer
 
 // Blink times in ms
 #define RGB_SLOW    1000
