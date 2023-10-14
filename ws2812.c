@@ -164,6 +164,7 @@ void WS2812_write_simple(WS2812* ws2812, int color) {
     __disable_irq();
 
     for (i = 0; i < ws2812->size; i++) {
+
         for (k = FRAME_SIZE-1; k>=0; k--){
             if ((color>>k)&0x01) {
                 //need to set the output high

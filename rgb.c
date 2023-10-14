@@ -51,8 +51,8 @@
 
 // Declarations
 
-#define NUM_RING_PIXELS 1
-#define NUM_RAIL_PIXELS 1
+#define NUM_RING_PIXELS 45
+#define NUM_RAIL_PIXELS 11
 
 WS2812 ring_led;
 WS2812 rail_led;
@@ -76,7 +76,7 @@ typedef struct { // Structure to store the RGB bits
     uint8_t B;
 } COLOR_LIST;
 
-#if STATUS_LIGHT_ENABLE == 2
+#if STATUS_LIGHT_ENABLE == 2 //dim lights for development.
 static COLOR_LIST neo_colors[] = {
         { 0, 0, 0 },  // Off [0]
         { 12, 0, 0 },  // Red [1]
@@ -114,7 +114,9 @@ static void rgb_set_led (uint8_t reqColor) {
     if ( currColor != reqColor) {
         currColor = reqColor;
         neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;
-        WS2812_write_simple(&rail_led, neocolor);   
+        WS2812_write_simple(&rail_led, neocolor);
+        if(ring_led.size)
+            WS2812_write_simple(&ring_led, neocolor);    
     }
 }
 
@@ -228,18 +230,18 @@ void status_light_init() {
 
         if(hal.port.set_pin_description) {  // Viewable from $PINS command in MDI / Console
 
-        //ring_port = RING_LED_AUXOUT;
+        ring_port = RING_LED_AUXOUT;
         rail_port = RAIL_LED_AUXOUT;
 
-        //ioport_claim(Port_Digital, Port_Output, &ring_port, "RING NEOPIXEL PORT");
+        ioport_claim(Port_Digital, Port_Output, &ring_port, "RING NEOPIXEL PORT");
         ioport_claim(Port_Digital, Port_Output, &rail_port, "RAIL NEOPIXEL PORT");
 
         rail_led.gpo = rail_port;
         rail_led.size = NUM_RAIL_PIXELS;
         WS2812_setDelays(&rail_led, 0, 5, 10, 5);
-        //ring_led.gpo = ring_port;
-        //ring_led.size = NUM_RING_PIXELS;
-        //WS2812_setDelays(&rail_led, 10, 10, 1, 1); 
+        ring_led.gpo = ring_port;
+        ring_led.size = NUM_RING_PIXELS;
+        WS2812_setDelays(&ring_led, 0, 5, 10, 5); 
       
         driver_reset = hal.driver_reset;                    // Subscribe to driver reset event
         hal.driver_reset = driverReset;
