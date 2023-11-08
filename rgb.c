@@ -57,6 +57,16 @@
 WS2812 ring_led;
 WS2812 rail_led;
 
+typedef union {
+    uint8_t value;
+    struct {
+        uint8_t
+        white_rail      :1,
+        white_ring      :1,
+        reserved        :6;
+    };
+} LED_flags_t;
+
 int ring_buf[NUM_RING_PIXELS];
 int rail_buf[NUM_RAIL_PIXELS];
 
@@ -64,6 +74,9 @@ int rail_buf[NUM_RAIL_PIXELS];
 static uint8_t rail_port;                   // Aux out connected to RAIL
 static uint8_t ring_port;                   // Aux out connected to RING led strip
 static sys_state_t current_state;           // For storing the current state from sys.state via state_get()
+
+static user_mcode_ptrs_t user_mcode;
+static LED_flags_t led_flags;
 
 static on_state_change_ptr on_state_change;                  
 static on_report_options_ptr on_report_options;            
@@ -105,6 +118,66 @@ static COLOR_LIST neo_colors[] = {
 #endif
 
 // Functions
+
+static user_mcode_t mcode_check (user_mcode_t mcode)
+{
+    return mcode == (user_mcode_t)356
+                     ? mcode
+                     : (user_mcode.check ? user_mcode.check(mcode) : UserMCode_Ignore);
+}
+
+static status_code_t mcode_validate (parser_block_t *gc_block, parameter_words_t *deprecated)
+{
+    status_code_t state = Status_OK;
+
+    if(gc_block->user_mcode == (user_mcode_t)356) {
+
+        if(gc_block->words.p) {
+            if(isnanf(gc_block->values.p))
+                state = Status_GcodeValueWordMissing;
+            else if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 2.0f))
+                state = Status_GcodeValueOutOfRange;
+        } else if(gc_block->words.q) {
+            if(isnanf(gc_block->values.q))
+                state = Status_GcodeValueWordMissing;
+            else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.p <= 1.0f))
+                state = Status_GcodeValueOutOfRange;
+        } else
+            state = Status_GcodeValueWordMissing;
+
+        if(state == Status_OK && gc_block->words.p != gc_block->words.q) {
+            gc_block->words.p = gc_block->words.q = Off;
+            gc_block->user_mcode_sync = On;
+        } else
+            state = Status_GcodeValueOutOfRange;
+
+    } else
+        state = Status_Unhandled;
+
+    return state == Status_Unhandled && user_mcode.validate ? user_mcode.validate(gc_block, deprecated) : state;
+}
+
+static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
+{
+    bool handled = true;
+    
+    if(gc_block->user_mcode == (user_mcode_t)356) {
+        switch (gc_block->words.p){
+            case 0: //state driven
+            break;
+            case 1: //white override
+            break;
+            case 2: //off override
+            default:
+            handled = false;
+        }
+
+    } else
+        handled = false;
+
+    if(!handled && user_mcode.execute)
+        user_mcode.execute(state, gc_block);
+}
 
 // Physically sets the requested RGB light combination.
 // Always sets all three LEDs to avoid unintended light combinations
@@ -254,6 +327,12 @@ void status_light_init() {
 
         on_program_completed = grbl.on_program_completed;   // Subscribe to on program completed events (lightshow on complete?)
         grbl.on_program_completed = onProgramCompleted;     // Checkered Flag for successful end of program lives here
+
+
+        memcpy(&user_mcode, &hal.user_mcode, sizeof(user_mcode_ptrs_t));
+        hal.user_mcode.check = mcode_check;
+        hal.user_mcode.validate = mcode_validate;
+        hal.user_mcode.execute = mcode_execute;         
 
         protocol_enqueue_rt_command(RGBUpdateState);
 
