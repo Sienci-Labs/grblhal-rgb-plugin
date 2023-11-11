@@ -57,14 +57,10 @@
 WS2812 ring_led;
 WS2812 rail_led;
 
-typedef union {
-    uint8_t value;
-    struct {
-        uint8_t
-        white_rail      :1,
-        white_ring      :1,
-        reserved        :6;
-    };
+typedef enum {
+    LEDStateDriven = 0,         //!< 0 - state drive
+    LEDAllWhite = 1,         //!< 1 - all white
+    LEDOff = 2,  //!< 2 - all off
 } LED_flags_t;
 
 int ring_buf[NUM_RING_PIXELS];
@@ -76,7 +72,7 @@ static uint8_t ring_port;                   // Aux out connected to RING led str
 static sys_state_t current_state;           // For storing the current state from sys.state via state_get()
 
 static user_mcode_ptrs_t user_mcode;
-static LED_flags_t led_flags;
+static LED_flags_t rail_led_override, ring_led_override;
 
 static on_state_change_ptr on_state_change;                  
 static on_report_options_ptr on_report_options;            
@@ -135,48 +131,25 @@ static status_code_t mcode_validate (parser_block_t *gc_block, parameter_words_t
         if(gc_block->words.p) {
             if(isnanf(gc_block->values.p))
                 state = Status_GcodeValueWordMissing;
-            else if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 2.0f))
+            else if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 1.0f))
                 state = Status_GcodeValueOutOfRange;
         } else if(gc_block->words.q) {
             if(isnanf(gc_block->values.q))
                 state = Status_GcodeValueWordMissing;
-            else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.p <= 1.0f))
+            else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q <= 2.0f))
                 state = Status_GcodeValueOutOfRange;
         } else
             state = Status_GcodeValueWordMissing;
 
-        if(state == Status_OK && gc_block->words.p != gc_block->words.q) {
+        if(state == Status_OK) {
             gc_block->words.p = gc_block->words.q = Off;
             gc_block->user_mcode_sync = On;
-        } else
-            state = Status_GcodeValueOutOfRange;
+        }
 
     } else
         state = Status_Unhandled;
 
     return state == Status_Unhandled && user_mcode.validate ? user_mcode.validate(gc_block, deprecated) : state;
-}
-
-static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
-{
-    bool handled = true;
-    
-    if(gc_block->user_mcode == (user_mcode_t)356) {
-        switch (gc_block->words.p){
-            case 0: //state driven
-            break;
-            case 1: //white override
-            break;
-            case 2: //off override
-            default:
-            handled = false;
-        }
-
-    } else
-        handled = false;
-
-    if(!handled && user_mcode.execute)
-        user_mcode.execute(state, gc_block);
 }
 
 // Physically sets the requested RGB light combination.
@@ -186,10 +159,32 @@ static void rgb_set_led (uint8_t reqColor) {
     int neocolor;
     if ( currColor != reqColor) {
         currColor = reqColor;
-        neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;
+        
+
+        switch (rail_led_override){
+            case LEDAllWhite:
+            neocolor = (neo_colors[RGB_WHITE].G)<<16 | (neo_colors[RGB_WHITE].R)<<8 | neo_colors[RGB_WHITE].B;
+            break;
+            case LEDOff:
+            neocolor = (neo_colors[RGB_OFF].G)<<16 | (neo_colors[RGB_OFF].R)<<8 | neo_colors[RGB_OFF].B;
+            break;
+            default:
+            neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;                       
+        }
         WS2812_write_simple(&rail_led, neocolor);
-        if(ring_led.size)
-            WS2812_write_simple(&ring_led, neocolor);    
+        if(ring_led.size){
+            switch (ring_led_override){
+                case LEDAllWhite:
+                neocolor = (neo_colors[RGB_WHITE].G)<<16 | (neo_colors[RGB_WHITE].R)<<8 | neo_colors[RGB_WHITE].B;
+                break;
+                case LEDOff:
+                neocolor = (neo_colors[RGB_OFF].G)<<16 | (neo_colors[RGB_OFF].R)<<8 | neo_colors[RGB_OFF].B;
+                break;
+                default:
+                neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;            
+            }
+            WS2812_write_simple(&ring_led, neocolor);
+        }   
     }
 }
 
@@ -247,6 +242,52 @@ static void RGBUpdateState (sys_state_t state){
             rgb_set_led(RGB_GREY);
             break;                                                                         
         }
+}
+
+static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
+{
+    bool handled = false;
+    
+    if(gc_block->user_mcode == (user_mcode_t)356) {
+
+        if(gc_block->values.q == 0.0f){//state drive
+            if(gc_block->values.p == 0.0f){
+                rail_led_override = LEDStateDriven;
+                report_message("Rail lights automatic", Message_Info);
+            }else{
+                ring_led_override = LEDStateDriven;
+                report_message("Ring lights automatic", Message_Info);
+            }    
+            handled = true;
+            
+        } else if (gc_block->values.q == 1.0f){//white override
+            if(gc_block->values.p == 0.0f){
+                rail_led_override = LEDAllWhite;
+                report_message("Rail lights all white", Message_Info);
+            }else{
+                ring_led_override = LEDAllWhite;
+                report_message("Ring lights all white", Message_Info);
+            }            
+            handled = true;               
+        } else{//off override
+            if(gc_block->values.p == 0.0f){
+                rail_led_override = LEDOff;
+                report_message("Rail lights off", Message_Info);
+            }else{
+                ring_led_override = LEDOff;
+                report_message("Ring lights off", Message_Info);
+            }         
+            handled = true;
+        }
+    } else
+        handled = false;
+
+    rgb_set_led(RGB_OFF); 
+    current_state = state_get();
+    RGBUpdateState(current_state);   
+
+    if(!handled && user_mcode.execute)
+        user_mcode.execute(state, gc_block);
 }
 
 static void RGBonStateChanged (sys_state_t state)
