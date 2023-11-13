@@ -134,7 +134,7 @@ static const setting_detail_t user_settings[] = {
 };
 
 static const setting_descr_t rgb_plugin_settings_descr[] = {
-    { Setting_SLB32_RingLEDNum, "Set number of pixels in the chain.\\n\\n"
+    { Setting_SLB32_RingLEDNum, "Set number of pixels in the chain plus the onboard LED.\\n\\n"
                             "NOTE: A hard reset of the controller is required after changing this setting."
     }, 
     { Setting_SLB32_RailLEDNum, "Set number of pixels in the chain.\\n\\n"
