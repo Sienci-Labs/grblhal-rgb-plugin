@@ -133,6 +133,15 @@ static const setting_detail_t user_settings[] = {
     { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "128", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },  
 };
 
+static const setting_descr_t rgb_plugin_settings_descr[] = {
+    { Setting_SLB32_RingLEDNum, "Set number of pixels in the chain.\\n\\n"
+                            "NOTE: A hard reset of the controller is required after changing this setting."
+    }, 
+    { Setting_SLB32_RailLEDNum, "Set number of pixels in the chain.\\n\\n"
+                            "NOTE: A hard reset of the controller is required after changing this setting."
+    },     
+};
+
 // Functions
 
 static user_mcode_t mcode_check (user_mcode_t mcode)
@@ -388,25 +397,14 @@ static setting_details_t setting_details = {
     .n_groups = sizeof(user_groups) / sizeof(setting_group_detail_t),
     .settings = user_settings,
     .n_settings = sizeof(user_settings) / sizeof(setting_detail_t),
-#if 0
+#if 1
     .descriptions = rgb_plugin_settings_descr,
-    .n_descriptions = sizeof(probe_plugin_settings_descr) / sizeof(setting_descr_t),
+    .n_descriptions = sizeof(rgb_plugin_settings_descr) / sizeof(setting_descr_t),
 #endif
     .save = plugin_settings_save,
     .load = plugin_settings_load,
     .restore = plugin_settings_restore
 };
-
-static void on_settings_changed (settings_t *settings, settings_changed_flags_t changed)
-{
-    settings_changed(settings, changed);
-    
-    rail_led.size = rgb_plugin_settings.rail_pixels;
-    ring_led.size = rgb_plugin_settings.ring_pixels;
-
-    current_state = state_get();
-    RGBUpdateState(current_state);  
-}
 
 // INIT FUNCTION - CALLED FROM plugins_init.h()
 void status_light_init() {
@@ -441,10 +439,7 @@ void status_light_init() {
         on_program_completed = grbl.on_program_completed;   // Subscribe to on program completed events (lightshow on complete?)
         grbl.on_program_completed = onProgramCompleted;     // Checkered Flag for successful end of program lives here
 
-        //settings_changed = hal.settings_changed;            //Subscribe to settings changed to update LED numbers.
-        //hal.settings_changed = on_settings_changed;
-
-        //settings_register(&setting_details);
+        settings_register(&setting_details);
 
         memcpy(&user_mcode, &hal.user_mcode, sizeof(user_mcode_ptrs_t));
         hal.user_mcode.check = mcode_check;
