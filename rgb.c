@@ -52,7 +52,7 @@
 // Declarations
 
 #define NUM_RING_PIXELS 45
-#define NUM_RAIL_PIXELS 11
+#define NUM_RAIL_PIXELS 100
 
 WS2812 ring_led;
 WS2812 rail_led;
@@ -66,6 +66,14 @@ typedef enum {
 int ring_buf[NUM_RING_PIXELS];
 int rail_buf[NUM_RAIL_PIXELS];
 
+typedef struct {
+    int ring_pixels;
+    int rail_pixels;
+} rgb_plugin_settings_t;
+
+static rgb_plugin_settings_t rgb_plugin_settings;
+static nvs_address_t nvs_address;
+
 // Set preferred STATLE_IDLE light color, will be moving to a $ setting in future
 static uint8_t rail_port;                   // Aux out connected to RAIL
 static uint8_t ring_port;                   // Aux out connected to RING led strip
@@ -78,6 +86,7 @@ static on_state_change_ptr on_state_change;
 static on_report_options_ptr on_report_options;            
 static on_program_completed_ptr on_program_completed;
 static driver_reset_ptr driver_reset;
+static settings_changed_ptr settings_changed;
 
 typedef struct { // Structure to store the RGB bits
     uint8_t R;
@@ -112,6 +121,17 @@ static COLOR_LIST neo_colors[] = {
         { 50, 50, 50 },  // Grey [7]
 };
 #endif
+
+// Add info about our settings for $help and enumerations.
+// Potentially used by senders for settings UI.
+static const setting_group_detail_t user_groups [] = {
+    { Group_Root, Group_General, "RGB Controls"}
+};
+
+static const setting_detail_t user_settings[] = {
+    { Setting_SLB32_RingLEDNum, Group_General, "Number of ring pixels.", NULL, Format_Integer, "-##0", "0", "45", Setting_NonCore, &rgb_plugin_settings.ring_pixels, NULL, NULL },
+    { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "128", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },  
+};
 
 // Functions
 
@@ -336,11 +356,63 @@ static void driverReset (void)
     driver_reset();
 }
 
+// Write settings to non volatile storage (NVS).
+static void plugin_settings_save (void)
+{
+    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&rgb_plugin_settings, sizeof(rgb_plugin_settings_t), true);
+}
+
+// Restore default settings and write to non volatile storage (NVS).
+// Default is highest numbered free port.
+static void plugin_settings_restore (void)
+{
+    rgb_plugin_settings.ring_pixels = 0;
+    rgb_plugin_settings.rail_pixels = 1;
+    hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&rgb_plugin_settings, sizeof(rgb_plugin_settings_t), true);
+}
+
+// Load our settings from non volatile storage (NVS).
+// If load fails restore to default values.
+static void plugin_settings_load (void)
+{
+    if(hal.nvs.memcpy_from_nvs((uint8_t *)&rgb_plugin_settings, nvs_address, sizeof(rgb_plugin_settings_t), true) != NVS_TransferResult_OK)
+        plugin_settings_restore();
+    
+    rail_led.size = rgb_plugin_settings.rail_pixels;
+    ring_led.size = rgb_plugin_settings.ring_pixels;
+}
+
+// Settings descriptor used by the core when interacting with this plugin.
+static setting_details_t setting_details = {
+    .groups = user_groups,
+    .n_groups = sizeof(user_groups) / sizeof(setting_group_detail_t),
+    .settings = user_settings,
+    .n_settings = sizeof(user_settings) / sizeof(setting_detail_t),
+#if 0
+    .descriptions = rgb_plugin_settings_descr,
+    .n_descriptions = sizeof(probe_plugin_settings_descr) / sizeof(setting_descr_t),
+#endif
+    .save = plugin_settings_save,
+    .load = plugin_settings_load,
+    .restore = plugin_settings_restore
+};
+
+static void on_settings_changed (settings_t *settings, settings_changed_flags_t changed)
+{
+    settings_changed(settings, changed);
+    
+    rail_led.size = rgb_plugin_settings.rail_pixels;
+    ring_led.size = rgb_plugin_settings.ring_pixels;
+
+    current_state = state_get();
+    RGBUpdateState(current_state);  
+}
+
 // INIT FUNCTION - CALLED FROM plugins_init.h()
 void status_light_init() {
 
     // CLAIM AUX OUTPUTS FOR RGB LIGHT STRIPS
-    if(hal.port.num_digital_out >= 2) {
+    if((hal.port.num_digital_out >= 2) && (nvs_address = nvs_alloc(sizeof(rgb_plugin_settings_t)))) {
 
         if(hal.port.set_pin_description) {  // Viewable from $PINS command in MDI / Console
 
@@ -369,6 +441,10 @@ void status_light_init() {
         on_program_completed = grbl.on_program_completed;   // Subscribe to on program completed events (lightshow on complete?)
         grbl.on_program_completed = onProgramCompleted;     // Checkered Flag for successful end of program lives here
 
+        //settings_changed = hal.settings_changed;            //Subscribe to settings changed to update LED numbers.
+        //hal.settings_changed = on_settings_changed;
+
+        //settings_register(&setting_details);
 
         memcpy(&user_mcode, &hal.user_mcode, sizeof(user_mcode_ptrs_t));
         hal.user_mcode.check = mcode_check;

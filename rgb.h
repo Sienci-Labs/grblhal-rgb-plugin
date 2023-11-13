@@ -24,9 +24,17 @@
 #pragma once
 
 #ifdef ARDUINO
-#include "../driver.h"
+#include "../../grbl/hal.h"
+#include "../../grbl/protocol.h"
+#include "../../grbl/state_machine.h"
+#include "../../grbl/report.h"
+#include "../../grbl/nvs_buffer.h"
 #else
-#include "driver.h"
+#include "grbl/hal.h"
+#include "grbl/protocol.h"
+#include "grbl/state_machine.h"
+#include "grbl/report.h"
+#include "grbl/nvs_buffer.h"
 #endif
 
 /*No connection:orange, Idle:white, Cycle/Running:green, Jogging:green, Hold:yellow,  Door:yellow, Homing:blue, Check:blue, Alarm:red, E-stop:red, Sleep:gray, Tool Change:purple*/
