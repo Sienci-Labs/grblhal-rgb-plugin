@@ -54,6 +54,9 @@
 #define NUM_RING_PIXELS 45
 #define NUM_RAIL_PIXELS 100
 
+static uint32_t debounce_ms = 0;
+#define DEBOUNCE_DELAY 2000
+
 WS2812 ring_led;
 WS2812 rail_led;
 
@@ -61,6 +64,7 @@ typedef enum {
     LEDStateDriven = 0,         //!< 0 - state drive
     LEDAllWhite = 1,         //!< 1 - all white
     LEDOff = 2,  //!< 2 - all off
+    LEDGreen=3,
 } LED_flags_t;
 
 int ring_buf[NUM_RING_PIXELS];
@@ -130,14 +134,14 @@ static const setting_group_detail_t user_groups [] = {
 
 static const setting_detail_t user_settings[] = {
     { Setting_SLB32_RingLEDNum, Group_General, "Number of ring pixels.", NULL, Format_Integer, "-##0", "0", "45", Setting_NonCore, &rgb_plugin_settings.ring_pixels, NULL, NULL },
-    { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "128", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },  
+    { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "100", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },  
 };
 
 static const setting_descr_t rgb_plugin_settings_descr[] = {
-    { Setting_SLB32_RingLEDNum, "Set number of pixels in the chain plus the onboard LED.\\n\\n"
+    { Setting_SLB32_RingLEDNum, "Set number of pixels in the chain.\\n\\n"
                             "NOTE: A hard reset of the controller is required after changing this setting."
     }, 
-    { Setting_SLB32_RailLEDNum, "Set number of pixels in the chain.\\n\\n"
+    { Setting_SLB32_RailLEDNum, "Set number of pixels in the chain plus the onboard LED.\\n\\n"
                             "NOTE: A hard reset of the controller is required after changing this setting."
     },     
 };
@@ -165,7 +169,7 @@ static status_code_t mcode_validate (parser_block_t *gc_block, parameter_words_t
         } else if(gc_block->words.q) {
             if(isnanf(gc_block->values.q))
                 state = Status_GcodeValueWordMissing;
-            else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q <= 2.0f))
+            else if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q <= 3.0f))
                 state = Status_GcodeValueOutOfRange;
         } else
             state = Status_GcodeValueWordMissing;
@@ -197,6 +201,9 @@ static void rgb_set_led (uint8_t reqColor) {
             case LEDOff:
             neocolor = (neo_colors[RGB_OFF].G)<<16 | (neo_colors[RGB_OFF].R)<<8 | neo_colors[RGB_OFF].B;
             break;
+            case LEDGreen:
+            neocolor = (neo_colors[RGB_GREEN].G)<<16 | (neo_colors[RGB_GREEN].R)<<8 | neo_colors[RGB_GREEN].B;
+            break;            
             default:
             neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;                       
         }
@@ -209,6 +216,9 @@ static void rgb_set_led (uint8_t reqColor) {
                 case LEDOff:
                 neocolor = (neo_colors[RGB_OFF].G)<<16 | (neo_colors[RGB_OFF].R)<<8 | neo_colors[RGB_OFF].B;
                 break;
+                case LEDGreen:
+                neocolor = (neo_colors[RGB_GREEN].G)<<16 | (neo_colors[RGB_GREEN].R)<<8 | neo_colors[RGB_GREEN].B;
+                break;                      
                 default:
                 neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;            
             }
@@ -223,7 +233,7 @@ static void warning_msg (uint_fast16_t state)
 }
  
 static void RGBUpdateState (sys_state_t state){
-    
+   
     switch (state) { // States with solid lights  *** These should use lookups
 
         // Chilling when idle, cool blue
@@ -231,7 +241,7 @@ static void RGBUpdateState (sys_state_t state){
             rgb_set_led(RGB_WHITE);
             break; 
 
-        // Running GCode (only seen if no M3 command for spindle on)
+        // Running GCode
         case STATE_CYCLE:
             rgb_set_led(RGB_GREEN);
             break; 
@@ -270,7 +280,7 @@ static void RGBUpdateState (sys_state_t state){
         case STATE_SLEEP:
             rgb_set_led(RGB_GREY);
             break;                                                                         
-        }
+    }
 }
 
 static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
@@ -297,7 +307,16 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
                 ring_led_override = LEDAllWhite;
                 report_message("Ring lights all white", Message_Info);
             }            
-            handled = true;               
+            handled = true;
+        } else if (gc_block->values.q == 2.0f){//white override
+            if(gc_block->values.p == 0.0f){
+                rail_led_override = LEDGreen;
+                report_message("Rail lights all green", Message_Info);
+            }else{
+                ring_led_override = LEDGreen;
+                report_message("Ring lights all green", Message_Info);
+            }            
+            handled = true;                              
         } else{//off override
             if(gc_block->values.p == 0.0f){
                 rail_led_override = LEDOff;
