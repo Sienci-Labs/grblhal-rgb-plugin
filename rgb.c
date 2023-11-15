@@ -128,9 +128,9 @@ static COLOR_LIST neo_colors[] = {
 
 // Add info about our settings for $help and enumerations.
 // Potentially used by senders for settings UI.
-static const setting_group_detail_t user_groups [] = {
-    { Group_Root, Group_General, "RGB Controls"}
-};
+/*static const setting_group_detail_t user_groups [] = {
+    { Group_Root, Group_General, "Gee"}
+};*/
 
 static const setting_detail_t user_settings[] = {
     { Setting_SLB32_RingLEDNum, Group_General, "Number of ring pixels.", NULL, Format_Integer, "-##0", "0", "45", Setting_NonCore, &rgb_plugin_settings.ring_pixels, NULL, NULL },
@@ -412,8 +412,8 @@ static void plugin_settings_load (void)
 
 // Settings descriptor used by the core when interacting with this plugin.
 static setting_details_t setting_details = {
-    .groups = user_groups,
-    .n_groups = sizeof(user_groups) / sizeof(setting_group_detail_t),
+    //.groups = user_groups,
+    //.n_groups = sizeof(user_groups) / sizeof(setting_group_detail_t),
     .settings = user_settings,
     .n_settings = sizeof(user_settings) / sizeof(setting_detail_t),
 #if 1
