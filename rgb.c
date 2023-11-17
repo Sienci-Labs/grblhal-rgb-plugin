@@ -75,7 +75,26 @@ typedef struct {
     int rail_pixels;
 } rgb_plugin_settings_t;
 
+typedef union {
+    uint32_t value;
+    struct {
+        uint32_t
+        invert         :1,
+        ext_pin        :1,
+        ext_pin_inv    :1,
+        tool_pin       :1,
+        tool_pin_inv   :1,
+        motion_protect :1,        
+        reserved    :26;
+    };
+} sienci_flags_t;
+
+typedef struct {
+    sienci_flags_t flags;
+} sienci_settings_t;
+
 static rgb_plugin_settings_t rgb_plugin_settings;
+static sienci_settings_t sienci_settings;
 static nvs_address_t nvs_address;
 
 // Set preferred STATLE_IDLE light color, will be moving to a $ setting in future
@@ -134,7 +153,9 @@ static COLOR_LIST neo_colors[] = {
 
 static const setting_detail_t user_settings[] = {
     { Setting_SLB32_RingLEDNum, Group_General, "Number of ring pixels.", NULL, Format_Integer, "-##0", "0", "45", Setting_NonCore, &rgb_plugin_settings.ring_pixels, NULL, NULL },
-    { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "100", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },  
+    { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "100", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },
+    { Setting_SLB32_Capabilities1, Group_General, "Using Add-ons", NULL, Format_Bitfield, "Probe, TLS, LED, SD, Spindle, Laser, Rotary, Flood, Mist, SwiftBank", NULL, NULL, Setting_NonCore, &sienci_settings.flags, NULL, NULL },
+    //{ Setting_SLB32_Capabilities2, Group_General, "Probe Protection Flags", NULL, Format_Bitfield, "Invert Tool Probe, External Connected Pin, Invert External Connected Pin, Alternate Tool Probe Pin, Invert Tool Probe Pin, Enable Motion Protection", NULL, NULL, Setting_NonCore, &probe_protect_settings.flags, NULL, NULL },  
 };
 
 static const setting_descr_t rgb_plugin_settings_descr[] = {
@@ -143,7 +164,10 @@ static const setting_descr_t rgb_plugin_settings_descr[] = {
     }, 
     { Setting_SLB32_RailLEDNum, "Set number of pixels in the chain plus the onboard LED.\\n\\n"
                             "NOTE: A hard reset of the controller is required after changing this setting."
-    },     
+    },  
+    { Setting_SLB32_Capabilities1, "Sienci specific capability flags.\\n\\n"
+    
+    },        
 };
 
 // Functions
@@ -187,14 +211,25 @@ static status_code_t mcode_validate (parser_block_t *gc_block, parameter_words_t
 
 // Physically sets the requested RGB light combination.
 // Always sets all three LEDs to avoid unintended light combinations
-static void rgb_set_led (uint8_t reqColor) { 
-    static uint8_t currColor = 99;
-    int neocolor;
-    if ( currColor != reqColor) {
-        currColor = reqColor;
-        
+static void rgb_set_led (uint8_t currColor) { 
+    int neocolor;        
 
-        switch (rail_led_override){
+    switch (rail_led_override){
+        case LEDAllWhite:
+        neocolor = (neo_colors[RGB_WHITE].G)<<16 | (neo_colors[RGB_WHITE].R)<<8 | neo_colors[RGB_WHITE].B;
+        break;
+        case LEDOff:
+        neocolor = (neo_colors[RGB_OFF].G)<<16 | (neo_colors[RGB_OFF].R)<<8 | neo_colors[RGB_OFF].B;
+        break;
+        case LEDGreen:
+        neocolor = (neo_colors[RGB_GREEN].G)<<16 | (neo_colors[RGB_GREEN].R)<<8 | neo_colors[RGB_GREEN].B;
+        break;            
+        default:
+        neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;                       
+    }
+    WS2812_write_simple(&rail_led, neocolor);
+    if(ring_led.size){
+        switch (ring_led_override){
             case LEDAllWhite:
             neocolor = (neo_colors[RGB_WHITE].G)<<16 | (neo_colors[RGB_WHITE].R)<<8 | neo_colors[RGB_WHITE].B;
             break;
@@ -203,28 +238,12 @@ static void rgb_set_led (uint8_t reqColor) {
             break;
             case LEDGreen:
             neocolor = (neo_colors[RGB_GREEN].G)<<16 | (neo_colors[RGB_GREEN].R)<<8 | neo_colors[RGB_GREEN].B;
-            break;            
+            break;                      
             default:
-            neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;                       
+            neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;            
         }
-        WS2812_write_simple(&rail_led, neocolor);
-        if(ring_led.size){
-            switch (ring_led_override){
-                case LEDAllWhite:
-                neocolor = (neo_colors[RGB_WHITE].G)<<16 | (neo_colors[RGB_WHITE].R)<<8 | neo_colors[RGB_WHITE].B;
-                break;
-                case LEDOff:
-                neocolor = (neo_colors[RGB_OFF].G)<<16 | (neo_colors[RGB_OFF].R)<<8 | neo_colors[RGB_OFF].B;
-                break;
-                case LEDGreen:
-                neocolor = (neo_colors[RGB_GREEN].G)<<16 | (neo_colors[RGB_GREEN].R)<<8 | neo_colors[RGB_GREEN].B;
-                break;                      
-                default:
-                neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;            
-            }
-            WS2812_write_simple(&ring_led, neocolor);
-        }   
-    }
+        WS2812_write_simple(&ring_led, neocolor);
+    }   
 }
 
 static void warning_msg (uint_fast16_t state)
@@ -308,7 +327,7 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
                 report_message("Ring lights all white", Message_Info);
             }            
             handled = true;
-        } else if (gc_block->values.q == 2.0f){//white override
+        } else if (gc_block->values.q == 3.0f){//Green override
             if(gc_block->values.p == 0.0f){
                 rail_led_override = LEDGreen;
                 report_message("Rail lights all green", Message_Info);
@@ -330,9 +349,10 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
     } else
         handled = false;
 
-    rgb_set_led(RGB_OFF); 
+    rgb_set_led(RGB_OFF);
+    hal.delay_ms(150, NULL); 
     current_state = state_get();
-    RGBUpdateState(current_state);   
+    RGBUpdateState(current_state);
 
     if(!handled && user_mcode.execute)
         user_mcode.execute(state, gc_block);
