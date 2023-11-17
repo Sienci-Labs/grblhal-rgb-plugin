@@ -154,7 +154,7 @@ static COLOR_LIST neo_colors[] = {
 static const setting_detail_t user_settings[] = {
     { Setting_SLB32_RingLEDNum, Group_General, "Number of ring pixels.", NULL, Format_Integer, "-##0", "0", "45", Setting_NonCore, &rgb_plugin_settings.ring_pixels, NULL, NULL },
     { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "100", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },
-    { Setting_SLB32_Capabilities1, Group_General, "Using Add-ons", NULL, Format_Bitfield, "Probe, TLS, LED, SD, Spindle, Laser, Rotary, Flood, Mist, SwiftBank", NULL, NULL, Setting_NonCore, &sienci_settings.flags, NULL, NULL },
+    { Setting_SLB32_Capabilities1, Group_General, "Using Add-ons", NULL, Format_Bitfield, "Probe, TLS, LED, SD, Spindle, Laser, Rotary, Flood, Mist, SwitchBank", NULL, NULL, Setting_NonCore, &sienci_settings.flags, NULL, NULL },
     //{ Setting_SLB32_Capabilities2, Group_General, "Probe Protection Flags", NULL, Format_Bitfield, "Invert Tool Probe, External Connected Pin, Invert External Connected Pin, Alternate Tool Probe Pin, Invert Tool Probe Pin, Enable Motion Protection", NULL, NULL, Setting_NonCore, &probe_protect_settings.flags, NULL, NULL },  
 };
 
