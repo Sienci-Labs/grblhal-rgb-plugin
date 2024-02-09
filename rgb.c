@@ -152,17 +152,17 @@ static COLOR_LIST neo_colors[] = {
 };*/
 
 static const setting_detail_t user_settings[] = {
-    { Setting_SLB32_RingLEDNum, Group_General, "Number of ring pixels.", NULL, Format_Integer, "-##0", "0", "45", Setting_NonCore, &rgb_plugin_settings.ring_pixels, NULL, NULL },
-    { Setting_SLB32_RailLEDNum, Group_General, "Number of rail pixels.", NULL, Format_Integer, "-###0", "0", "100", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },
-    { Setting_SLB32_Capabilities1, Group_General, "Using Add-ons", NULL, Format_Bitfield, "Probe, TLS, LED, SD, Spindle, Laser, Rotary, Flood, Mist, SwitchBank", NULL, NULL, Setting_NonCore, &sienci_settings.flags, NULL, NULL },
+    { Setting_SLB32_RingLEDNum, Group_General, "Ring pixels", NULL, Format_Integer, "-##0", "0", "45", Setting_NonCore, &rgb_plugin_settings.ring_pixels, NULL, NULL },
+    { Setting_SLB32_RailLEDNum, Group_General, "Rail pixels", NULL, Format_Integer, "-###0", "0", "100", Setting_NonCore, &rgb_plugin_settings.rail_pixels, NULL, NULL },
+    { Setting_SLB32_Capabilities1, Group_General, "Using add-ons", NULL, Format_Bitfield, "Probe, TLS, LED, SD, Spindle, Laser, Rotary, Flood, Mist, AuxOut", NULL, NULL, Setting_NonCore, &sienci_settings.flags, NULL, NULL },
     //{ Setting_SLB32_Capabilities2, Group_General, "Probe Protection Flags", NULL, Format_Bitfield, "Invert Tool Probe, External Connected Pin, Invert External Connected Pin, Alternate Tool Probe Pin, Invert Tool Probe Pin, Enable Motion Protection", NULL, NULL, Setting_NonCore, &probe_protect_settings.flags, NULL, NULL },  
 };
 
 static const setting_descr_t rgb_plugin_settings_descr[] = {
-    { Setting_SLB32_RingLEDNum, "Set number of pixels in the chain.\\n\\n"
+    { Setting_SLB32_RingLEDNum, "Number of individual pixels or LEDs connected.\\n\\n"
                             "NOTE: A hard reset of the controller is required after changing this setting."
     }, 
-    { Setting_SLB32_RailLEDNum, "Set number of pixels in the chain plus the onboard LED.\\n\\n"
+    { Setting_SLB32_RailLEDNum, "Number of individual pixels or LEDs connected. Include the onboard LED.\\n\\n"
                             "NOTE: A hard reset of the controller is required after changing this setting."
     },  
     { Setting_SLB32_Capabilities1, "Sienci specific capability flags.\\n\\n"
