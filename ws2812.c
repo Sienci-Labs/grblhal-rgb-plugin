@@ -59,11 +59,12 @@ int main()
 #define GLOBAL 1
 #define PER_PIXEL 2
 
-void WS2812_setDelays(WS2812* ws2812, int zeroHigh, int zeroLow, int oneHigh, int oneLow) {
+void WS2812_setDelays(WS2812* ws2812, int zeroHigh, int zeroLow, int oneHigh, int oneLow, int latch) {
     ws2812->zeroHigh = zeroHigh;
     ws2812->zeroLow = zeroLow;
     ws2812->oneHigh = oneHigh;
     ws2812->oneLow = oneLow;
+    ws2812->latch = latch;
 }
 
 void WS2812_loadBuf(WS2812* ws2812, int* buf, int r_offset, int g_offset, int b_offset) {
@@ -150,9 +151,12 @@ void WS2812_write_offsets(WS2812* ws2812, int* buf, int r_offset, int g_offset, 
             }
         }
     }
-
     // Exiting timing critical section, so enabling interrupts
     //__enable_irq();
+    for (j = 0; j < ws2812->latch; j++) {
+        __ASM volatile ("nop");
+    }    
+
 }
 
 void WS2812_write_simple(WS2812* ws2812, int color) {
@@ -198,6 +202,10 @@ void WS2812_write_simple(WS2812* ws2812, int color) {
 
     // Exiting timing critical section, so enabling interrupts
     __enable_irq();
+
+    for (j = 0; j < ws2812->latch; j++) {
+        __ASM volatile ("nop");
+    }
 }
 
 void WS2812_useII(WS2812* ws2812, int bc) {

@@ -227,7 +227,8 @@ static void rgb_set_led (uint8_t currColor) {
         default:
         neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;                       
     }
-    WS2812_write_simple(&rail_led, neocolor);
+        WS2812_write_simple(&rail_led, neocolor);
+        //hal.delay_ms(1,NULL); //delay to latch colors.
     if(ring_led.size){
         switch (ring_led_override){
             case LEDAllWhite:
@@ -243,7 +244,8 @@ static void rgb_set_led (uint8_t currColor) {
             neocolor = (neo_colors[currColor].G)<<16 | (neo_colors[currColor].R)<<8 | neo_colors[currColor].B;            
         }
         WS2812_write_simple(&ring_led, neocolor);
-    }   
+        //hal.delay_ms(1,NULL); //delay to latch colors.
+    }
 }
 
 static void warning_msg (uint_fast16_t state)
@@ -359,11 +361,11 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
 }
 
 static void RGBonStateChanged (sys_state_t state)
-{
-    RGBUpdateState(state);
-    
+{  
     if (on_state_change)         // Call previous function in the chain.
         on_state_change(state);
+
+    RGBUpdateState(state);
 }
 
 
@@ -461,10 +463,10 @@ void status_light_init() {
 
         rail_led.gpo = rail_port;
         rail_led.size = NUM_RAIL_PIXELS;
-        WS2812_setDelays(&rail_led, 0, 5, 10, 5);
+        WS2812_setDelays(&rail_led, 0, 5, 10, 5, 2500);
         ring_led.gpo = ring_port;
         ring_led.size = NUM_RING_PIXELS;
-        WS2812_setDelays(&ring_led, 0, 5, 10, 5); 
+        WS2812_setDelays(&ring_led, 0, 5, 10, 5, 2500); 
       
         driver_reset = hal.driver_reset;                    // Subscribe to driver reset event
         hal.driver_reset = driverReset;
