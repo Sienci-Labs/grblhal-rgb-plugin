@@ -189,72 +189,71 @@ static void rgb_set_led (rgb_color_t currColor) {
 static void set_hold (void *data)
 {
     if(state_get() == STATE_HOLD) {
-        if(state_get_substate() == 0)
-            rgb_set_led(RGB_YELLOW);
+        if(state_get_substate() != 0 || modbus_isbusy())
+            task_add_delayed(set_hold, data, 110);
         else
-            task_add_delayed(set_hold, NULL, 200);
+            rgb_set_led(*(rgb_color_t *)data);
     }
 }
 
-static void set_alarm (void *data)
+static void set_color (void *data)
 {
-    if(state_get() == STATE_ALARM || state_get() == STATE_ESTOP) {
-        if(modbus_isbusy())
-            task_add_delayed(set_alarm, NULL, 200);
-         else
-             rgb_set_led(RGB_RED);
-    }
+    if(modbus_isbusy())
+        task_add_delayed(set_color, data, 110);
+    else
+        rgb_set_led(*(rgb_color_t *)data);
 }
 
-static void RGBUpdateState (sys_state_t state){
+static void RGBUpdateState (sys_state_t state) {
+
+    static rgb_color_t state_color = RGB_OFF;
 
     switch (state) { // States with solid lights  *** These should use lookups
 
         // Chilling when idle, cool blue
         case STATE_IDLE:
-            rgb_set_led(RGB_WHITE);
+            state_color = RGB_WHITE;
             break;
 
         // Running GCode
         case STATE_CYCLE:
-            rgb_set_led(RGB_GREEN);
+            state_color = RGB_GREEN;
             break;
 
         // Investigate strange soft limits error in joggging
         case STATE_JOG:
-            rgb_set_led(RGB_GREEN);
+            state_color = RGB_GREEN;
             break;
 
         // Would be nice to having homing be two colours as before, fast and seek - should be possible via real time thread
         case STATE_HOMING:
-            rgb_set_led(RGB_BLUE);
+            state_color = RGB_BLUE;
             break;
 
         case STATE_HOLD:
-            task_add_delayed(set_hold, NULL, 200);
-            break;
-
         case STATE_SAFETY_DOOR:
-            rgb_set_led(RGB_YELLOW);
+            state_color = RGB_YELLOW;
             break;
 
         case STATE_CHECK_MODE:
-            rgb_set_led(RGB_BLUE);
+            state_color = RGB_BLUE;
             break;
 
         case STATE_ESTOP:
         case STATE_ALARM:
-            task_add_delayed(set_alarm, NULL, 200);
+            state_color = RGB_RED;
             break;
 
         case STATE_TOOL_CHANGE:
-            rgb_set_led(RGB_MAGENTA);
+            state_color = RGB_MAGENTA;
             break;
 
         case STATE_SLEEP:
-            rgb_set_led(RGB_GREY);
+            state_color = RGB_GREY;
             break;
     }
+
+    task_add_delayed(state == STATE_HOLD ? set_hold : set_color, &state_color, state == STATE_HOLD ? 200 : 10);
 }
 
 static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
@@ -304,8 +303,6 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
             break;
         }
 
-        rgb_set_led(RGB_OFF);
-        hal.delay_ms(150, NULL);
         RGBUpdateState(state_get());
     }
 
