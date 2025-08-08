@@ -13,6 +13,11 @@
   PrintNC - High Performance, Open Source, Steel Frame, CNC - https://wiki.printnc.info
 
   Code heavily modified for use with Sienci SuperLongBoard and NEOPIXELS.
+  
+  Changelog:
+
+  2025/08/08 - Updated by Sienci Labs (PVDW) to support tc.macro mode
+
   Copyright (c) 2023 Sienci Labs
 
   This file is part of the SuperLongBoard family of products.
@@ -39,6 +44,7 @@
   M356 -  On = 1, Off = 2, RGB white LED inspection light in RGB Plugin
 */
 
+
 #include "driver.h"
 
 #if STATUS_LIGHT_ENABLE == 2 // 2 is reserved for this implementation
@@ -52,7 +58,7 @@
 #include "grbl/system.h"
 #include "grbl/alarms.h"
 #include "grbl/nuts_bolts.h"
-#include "grbl/task.h" 
+#include "grbl/task.h"
 #include "grbl/modbus.h"
 
 // Declarations
@@ -84,7 +90,49 @@ static on_report_options_ptr on_report_options;
 static on_program_completed_ptr on_program_completed;
 static user_mcode_ptrs_t user_mcode;
 
+static on_tool_selected_ptr on_tool_selected;
+static on_tool_changed_ptr on_tool_changed;
+
+static void rgb_set_led (rgb_color_t currColor);
+static void RGBUpdateState (sys_state_t state);
+static void set_color(void *data); // <-- ADD THIS
+
+
 // Functions
+
+static void RGBonToolSelected (tool_data_t *tool)
+{
+    report_message("RGBonToolSelected called", Message_Info);
+
+    // This just blinks very briefly
+    //rgb_set_led(RGB_MAGENTA);
+
+    // Adding a delay makes it stick
+    static rgb_color_t toolchange_color = RGB_MAGENTA;
+    task_add_delayed(set_color, &toolchange_color, 100);
+
+    if(on_tool_selected)
+        on_tool_selected(tool);
+}
+
+// Helper to call RGBUpdateState with correct type after delay
+static void delayed_state_update(void *data)
+{
+    RGBUpdateState((sys_state_t)(uintptr_t)data);
+}
+
+static void RGBonToolChanged (tool_data_t *tool)
+{
+    report_message("RGBonToolChanged called", Message_Info);
+
+    if(on_tool_changed)
+        on_tool_changed(tool);
+
+    // Schedule returning to normal state color after 100ms
+    task_add_delayed(delayed_state_update, (void *)(uintptr_t)state_get(), 100);
+}
+
+
 
 static user_mcode_type_t mcode_check (user_mcode_t mcode)
 {
@@ -330,7 +378,7 @@ static void onReportOptions (bool newopt)
 static void job_completed (void *data)
 {
     rgb_set_led((*(uint8_t *)data & 1) ? RGB_WHITE : RGB_OFF);
-   
+
     if(--(*(uint8_t *)data))
         task_add_delayed(job_completed, data, 150);
     else
@@ -352,7 +400,7 @@ static void onProgramCompleted (program_flow_t program_flow, bool check_mode)
 static void on_startup (void *data)
 {
     RGBUpdateState(state_get());
-} 
+}
 
 void status_light_init (void)
 {
@@ -371,6 +419,12 @@ void status_light_init (void)
         grbl.user_mcode.check = mcode_check;
         grbl.user_mcode.validate = mcode_validate;
         grbl.user_mcode.execute = mcode_execute;
+
+        on_tool_selected = grbl.on_tool_selected;
+        grbl.on_tool_selected = RGBonToolSelected;
+
+        on_tool_changed = grbl.on_tool_changed;
+        grbl.on_tool_changed = RGBonToolChanged;
 
         task_run_on_startup(on_startup, NULL);
 
