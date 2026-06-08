@@ -1,10 +1,77 @@
-'DATRON LIKE' RGB INDICATOR LIGHTS
-A Plugin for grblHAL
+# RGB Status Indicator Lights
+## A Plugin for grblHAL
 
-This plugin displays visual status by driving an onboard Neopixel on the SLB Black.  It uses simple bit-banging to generate the required waveforms and likely requires a core clock speed of at least 100 MHz.
+This plugin drives Neopixel LEDs on the SLB Black (and compatible boards) to indicate the CNC's runtime state via color. Uses simple bit-banging — requires a core clock speed of at least 100 MHz.
 
-Color states:
-No connection:orange(TBD), Idle:white, Cycle/Running:green, Jogging:green, Hold:yellow,  Door:yellow, Homing:blue, Check:blue, Alarm:red, E-stop:red, Sleep:gray, Tool Change:purple
+---
 
-# License
-This code has been created within the context of Open Hardware and is licensed under the "CERN-OHL-S v2". Please read more about this in the LICENSE file. You could redistribute and modify this source and make products using it under the terms of the CERN-OHL-S v2. This means stuff like licensing your changes reciprocally, giving attribution to us, and releasing hardware that this code runs on as CERN-OHL-S v2 too. Note that this LICENSE applies on all coding work done in prior commits to-date, and is now being released in good faith that no action will be taken to pursue past work in order to duplicate the work we've put in without having to abide by the License that's now being applied at its first public release.
+## Auto State Colors
+
+By default, the lights change color automatically based on machine state:
+
+| State | Color |
+|---|---|
+| Idle | White |
+| Cycle / Running | Green |
+| Jogging | Green |
+| Hold | Yellow |
+| Safety Door | Yellow |
+| Homing | Blue |
+| Check Mode | Blue |
+| Alarm | Red |
+| E-stop | Red |
+| Tool Change | Magenta (Purple) |
+| Sleep | Grey |
+
+On program completion, the lights flash white briefly (checkered flag effect).
+
+---
+
+## M356 — Manual Override
+
+Use `M356` to override the automatic color behavior for the rail (strip 0) or ring (strip 1) independently.
+
+### Syntax
+
+```
+M356 P<strip> Q<mode>
+```
+
+| Parameter | Values | Description |
+|---|---|---|
+| `P` | 0 = Rail, 1 = Ring | Selects which LED strip to control |
+| `Q` | 0 = Auto, 1 = White, 2 = Off, 3 = Green | Override mode |
+
+### Examples
+
+| Command | Rail | Ring |
+|---|---|---|
+| `M356 P0 Q0` | Auto | _(unchanged)_ |
+| `M356 P1 Q0` | _(unchanged)_ | Auto |
+| `M356 P0 Q1` | White | _(unchanged)_ |
+| `M356 P1 Q1` | _(unchanged)_ | White |
+| `M356 P0 Q2` | Off | _(unchanged)_ |
+| `M356 P1 Q2` | _(unchanged)_ | Off |
+| `M356 P0 Q3` | Green | _(unchanged)_ |
+| `M356 P1 Q3` | _(unchanged)_ | Green |
+
+To set both strips at once, send two commands. For example, to force both to white:
+
+```
+M356 P0 Q1
+M356 P1 Q1
+```
+
+The override persists until changed or the controller is reset.
+
+---
+
+## M150 — Manual Color Control
+
+For direct RGB color control (independent of state or overrides), the companion plugin from https://github.com/grblHAL/Plugins_misc/blob/main/rgb_led_m150.c can be used alongside this plugin. It adds `M150 R<red> G<green> B<blue>` support for setting arbitrary colors.
+
+---
+
+## License
+
+CERN-OHL-S v2 — see license header in `rgb.c`.
