@@ -1,7 +1,7 @@
 # RGB Status Indicator Lights
 ## A Plugin for grblHAL
 
-This plugin drives Neopixel LEDs on the SLB Black (and compatible boards) to indicate the CNC's runtime state via color. Uses simple bit-banging — requires a core clock speed of at least 100 MHz.
+This plugin drives Neopixel LEDs on the SLB Black (and compatible boards) to indicate the CNC's runtime state via color. Uses the grblHAL RGB HAL — the transfer method is driver-dependant (DMA on STM32F4x, PIO on RP2040/2350, RMT on ESP32, etc.).
 
 ---
 
