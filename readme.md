@@ -40,7 +40,7 @@ Use `M356` to override the automatic color behavior per LED zone.
 ### Syntax
 
 ```text
-M356 P<zone> Q<mode>
+M356 P<zone> Q<mode> S<brightness>
 ```
 
 | Parameter | Values | Description |
@@ -48,6 +48,7 @@ M356 P<zone> Q<mode>
 | `P` | `STATUS_LIGHT_ENABLE == 2`: 0 = Rail, 1 = Ring | Legacy two-string zone mapping |
 | `P` | `STATUS_LIGHT_ENABLE == 3`: 0 = Onboard, 1 = Offboard | Advanced single-strip zone mapping |
 | `Q` | 0 = Auto, 1 = White, 2 = Off, 3 = Green | Override mode |
+| `S` | 0-255 | Overall LED strip brightness |
 
 ### Examples
 
@@ -61,6 +62,9 @@ M356 P<zone> Q<mode>
 | `M356 P1 Q2` | Zone 1 off |
 | `M356 P0 Q3` | Zone 0 green |
 | `M356 P1 Q3` | Zone 1 green |
+| `M356 S64` | Set overall strip brightness to 64 |
+
+`M356 S<value>` can be used on its own without changing the current override mode.
 
 The override persists until changed or the controller is reset.
 

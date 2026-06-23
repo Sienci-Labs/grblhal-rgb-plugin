@@ -69,6 +69,7 @@ static on_tool_changed_ptr on_tool_changed;
 static LED_flags_t ring_override, offboard_override;
 static rgb_color_t ring_color[RGBV2_RING_LEDS];
 static rgb_color_t offboard_color = RGB_OFF;
+static uint8_t strip_intensity = 255;
 static bool animation_active = false;
 static uint8_t animation_frame = 0;
 static sys_state_t active_state = STATE_IDLE;
@@ -450,6 +451,12 @@ static status_code_t mcode_validate (parser_block_t *gc_block)
 
     if(gc_block->user_mcode == RGB_Inspection_Light) {
 
+        if(!gc_block->words.q)
+            gc_block->values.q = -1.0f;
+
+        if(!gc_block->words.s)
+            gc_block->values.s = -1.0f;
+
         if(gc_block->words.p) {
             if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 1.0f))
                 state = Status_GcodeValueOutOfRange;
@@ -459,6 +466,11 @@ static status_code_t mcode_validate (parser_block_t *gc_block)
             if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q <= 3.0f))
                 state = Status_GcodeValueOutOfRange;
             gc_block->words.q = Off;
+        }
+        if(gc_block->words.s) {
+            if(!(isintf(gc_block->values.s) && gc_block->values.s >= 0.0f && gc_block->values.s <= 255.0f))
+                state = Status_GcodeValueOutOfRange;
+            gc_block->words.s = Off;
         }
 
         gc_block->user_mcode_sync = On;
@@ -505,11 +517,17 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
     (void)state;
 
     if(gc_block->user_mcode == RGB_Inspection_Light) {
-        LED_flags_t mode = (LED_flags_t)gc_block->values.q;
+        int mode = (int)gc_block->values.q;
         bool onboard = gc_block->values.p == 0.0f;
 
-        if(onboard) {
-            ring_override = mode;
+        if(hal.rgb0.set_intensity && gc_block->values.s >= 0.0f && gc_block->values.s <= 255.0f) {
+            strip_intensity = (uint8_t)gc_block->values.s;
+            hal.rgb0.set_intensity(strip_intensity);
+            report_message("LED brightness updated", Message_Info);
+        }
+
+        if(onboard && mode >= 0) {
+            ring_override = (LED_flags_t)mode;
 
             switch(mode) {
                 case LEDStateDriven:
@@ -525,8 +543,8 @@ static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
                     report_message("Onboard LEDs all green", Message_Info);
                     break;
             }
-        } else {
-            offboard_override = mode;
+        } else if(mode >= 0) {
+            offboard_override = (LED_flags_t)mode;
 
             switch(mode) {
                 case LEDStateDriven:
@@ -626,7 +644,8 @@ void status_light_init (void)
         task_run_on_startup(on_startup, NULL);
 
 #ifdef DEBUG
-        hal.rgb0.set_intensity(10);
+        strip_intensity = 10;
+        hal.rgb0.set_intensity(strip_intensity);
 #endif
 
     } else
