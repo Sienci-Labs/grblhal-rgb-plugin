@@ -31,6 +31,24 @@ On program completion, the lights flash white briefly (checkered flag effect).
 
 In `STATUS_LIGHT_ENABLE == 3`, the first 12 onboard LEDs animate for active states while the offboard LEDs stay static. Idle, Cycle / Running, and Sleep remain static to avoid unnecessary task churn and jitter.
 
+### Onboard Ring Animations (`STATUS_LIGHT_ENABLE == 3`)
+
+| State | Onboard Ring Animation |
+|---|---|
+| Idle | Solid white |
+| Cycle / Running | Solid green |
+| Jogging | Green comet with a short bright head and dim trailing tail |
+| Hold | Full-ring yellow pulse between dim and bright |
+| Safety Door | Alternating yellow half-ring blink |
+| Homing | Mirrored blue sweep from opposite sides |
+| Check Mode | Rotating cyan checkerboard |
+| Alarm | Red chase with a fading tail |
+| E-stop | Full-ring red blink |
+| Tool Change | Rotating magenta dotted pattern |
+| Sleep | Solid grey |
+
+For `STATUS_LIGHT_ENABLE == 3`, LEDs `0..11` are the onboard ring and LEDs `12..end` remain a static offboard segment using the normal state color.
+
 ---
 
 ## M356 - Manual Override
