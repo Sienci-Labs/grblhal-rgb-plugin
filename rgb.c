@@ -92,10 +92,11 @@ static user_mcode_ptrs_t user_mcode;
 
 static on_tool_selected_ptr on_tool_selected;
 static on_tool_changed_ptr on_tool_changed;
+static uint8_t strip0_intensity = 255, strip1_intensity = 255;
 
 static void rgb_set_led (rgb_color_t currColor);
 static void RGBUpdateState (sys_state_t state);
-static void set_color(void *data); // <-- ADD THIS
+static void set_color(void *data);
 
 
 // Functions
@@ -147,6 +148,12 @@ static status_code_t mcode_validate (parser_block_t *gc_block)
 
     if(gc_block->user_mcode == RGB_Inspection_Light) {
 
+        if(!gc_block->words.q)
+            gc_block->values.q = -1.0f;
+
+        if(!gc_block->words.s)
+            gc_block->values.s = -1.0f;
+
         if(gc_block->words.p) {
             if(!(isintf(gc_block->values.p) && gc_block->values.p >= 0.0f && gc_block->values.p <= 1.0f))
                 state = Status_GcodeValueOutOfRange;
@@ -156,6 +163,11 @@ static status_code_t mcode_validate (parser_block_t *gc_block)
             if(!(isintf(gc_block->values.q) && gc_block->values.q >= 0.0f && gc_block->values.q <= 3.0f))
                 state = Status_GcodeValueOutOfRange;
             gc_block->words.q = Off;
+        }
+        if(gc_block->words.s) {
+            if(!(isintf(gc_block->values.s) && gc_block->values.s >= 0.0f && gc_block->values.s <= 255.0f))
+                state = Status_GcodeValueOutOfRange;
+            gc_block->words.s = Off;
         }
 
         gc_block->user_mcode_sync = On;
@@ -199,7 +211,7 @@ static void rgb_set_led (rgb_color_t currColor) {
                 hal.rgb0.out(device, strip0_color);
             }
 
-            if(hal.rgb0.num_devices > 1 && hal.rgb0.write)
+            if(hal.rgb0.write)
                 hal.rgb0.write();
         }
     }
@@ -228,19 +240,9 @@ static void rgb_set_led (rgb_color_t currColor) {
                 hal.rgb1.out(device, strip1_color);
             }
 
-            if(hal.rgb1.num_devices > 1 && hal.rgb1.write)
+            if(hal.rgb1.write)
                 hal.rgb1.write();
         }
-    }
-}
-
-static void set_hold (void *data)
-{
-    if(state_get() == STATE_HOLD) {
-        if(state_get_substate() != 0 || modbus_isbusy())
-            task_add_delayed(set_hold, data, 110);
-        else
-            rgb_set_led(*(rgb_color_t *)data);
     }
 }
 
@@ -254,61 +256,66 @@ static void set_color (void *data)
 
 static void RGBUpdateState (sys_state_t state) {
 
-    static rgb_color_t state_color = RGB_OFF;
+    switch (state) {
 
-    switch (state) { // States with solid lights  *** These should use lookups
-
-        // Chilling when idle, cool blue
         case STATE_IDLE:
-            state_color = RGB_WHITE;
+            rgb_set_led(RGB_WHITE);
             break;
 
-        // Running GCode
         case STATE_CYCLE:
-            state_color = RGB_GREEN;
-            break;
-
-        // Investigate strange soft limits error in joggging
         case STATE_JOG:
-            state_color = RGB_GREEN;
+            rgb_set_led(RGB_GREEN);
             break;
 
-        // Would be nice to having homing be two colours as before, fast and seek - should be possible via real time thread
         case STATE_HOMING:
-            state_color = RGB_BLUE;
+            rgb_set_led(RGB_BLUE);
             break;
 
         case STATE_HOLD:
         case STATE_SAFETY_DOOR:
-            state_color = RGB_YELLOW;
+            rgb_set_led(RGB_YELLOW);
             break;
 
         case STATE_CHECK_MODE:
-            state_color = RGB_BLUE;
+            rgb_set_led(RGB_BLUE);
             break;
 
         case STATE_ESTOP:
         case STATE_ALARM:
-            state_color = RGB_RED;
+            rgb_set_led(RGB_RED);
             break;
 
         case STATE_TOOL_CHANGE:
-            state_color = RGB_MAGENTA;
+            rgb_set_led(RGB_MAGENTA);
             break;
 
         case STATE_SLEEP:
-            state_color = RGB_GREY;
+            rgb_set_led(RGB_GREY);
             break;
     }
-
-    task_add_delayed(state == STATE_HOLD ? set_hold : set_color, &state_color, state == STATE_HOLD ? 200 : 10);
 }
 
 static void mcode_execute (uint_fast16_t state, parser_block_t *gc_block)
 {
     if(gc_block->user_mcode == RGB_Inspection_Light) {
 
-        switch((LED_flags_t)gc_block->values.q) {
+        if(hal.rgb0.set_intensity && gc_block->values.s >= 0.0f && gc_block->values.s <= 255.0f) {
+            strip0_intensity = (uint8_t)gc_block->values.s;
+            hal.rgb0.set_intensity(strip0_intensity);
+        }
+
+        if(hal.rgb1.set_intensity && gc_block->values.s >= 0.0f && gc_block->values.s <= 255.0f) {
+            strip1_intensity = (uint8_t)gc_block->values.s;
+            hal.rgb1.set_intensity(strip1_intensity);
+        }
+
+        if(gc_block->values.s >= 0.0f && gc_block->values.s <= 255.0f)
+            report_message("LED brightness updated", Message_Info);
+
+        switch((int)gc_block->values.q) {
+
+            case -1:
+                break;
 
             case LEDStateDriven:
                 if(gc_block->values.p == 0.0f){
@@ -429,9 +436,10 @@ void status_light_init (void)
         task_run_on_startup(on_startup, NULL);
 
 #ifdef DEBUG
-        hal.rgb0.set_intensity(10);
+        strip0_intensity = 10;
+        hal.rgb0.set_intensity(strip0_intensity);
         if(hal.rgb1.set_intensity)
-            hal.rgb1.set_intensity(10);
+            hal.rgb1.set_intensity(strip1_intensity = 10);
 #endif
 
     } else
