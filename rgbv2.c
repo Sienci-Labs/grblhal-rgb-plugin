@@ -502,7 +502,19 @@ static void RGBUpdateState (sys_state_t state)
 
     active_state = state;
 
-    if(animation == AnimationNone || !animation_allowed()) {
+    if(animation == AnimationNone) {
+        animation_stop();
+        set_static_state(state);
+        return;
+    }
+
+    if(!animation_allowed()) {
+        if(modbus_isbusy()) {
+            // animation_step() retries while Modbus is busy, like v1 set_color().
+            animation_start(state);
+            return;
+        }
+
         animation_stop();
         set_static_state(state);
         return;
