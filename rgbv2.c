@@ -71,6 +71,7 @@ static rgb_color_t ring_color[RGBV2_RING_LEDS];
 static rgb_color_t offboard_color = RGB_OFF;
 static uint8_t strip_intensity = 255;
 static bool animation_active = false;
+static bool toolchange_pending = false;
 static uint8_t animation_frame = 0;
 static sys_state_t active_state = STATE_IDLE;
 
@@ -419,6 +420,7 @@ static void RGBonToolSelected (tool_data_t *tool)
 {
     static rgb_color_t toolchange_color = RGB_MAGENTA;
 
+    toolchange_pending = true;
     task_add_delayed(set_color, &toolchange_color, 100);
 
     if(on_tool_selected)
@@ -427,15 +429,17 @@ static void RGBonToolSelected (tool_data_t *tool)
 
 static void delayed_state_update (void *data)
 {
-    RGBUpdateState((sys_state_t)(uintptr_t)data);
+    (void)data;
+    RGBUpdateState(state_get());
 }
 
 static void RGBonToolChanged (tool_data_t *tool)
 {
+    toolchange_pending = false;
     if(on_tool_changed)
         on_tool_changed(tool);
 
-    task_add_delayed(delayed_state_update, (void *)(uintptr_t)state_get(), 100);
+    task_add_delayed(delayed_state_update, NULL, 100);
 }
 
 static user_mcode_type_t mcode_check (user_mcode_t mcode)
@@ -483,6 +487,13 @@ static status_code_t mcode_validate (parser_block_t *gc_block)
 
 static void set_color (void *data)
 {
+    // A Modbus retry may run after toolchange has already finished.
+    // Restore the live state instead of writing a stale selection colour.
+    if(!toolchange_pending) {
+        RGBUpdateState(state_get());
+        return;
+    }
+
     rgb_color_t color = *(rgb_color_t *)data;
 
     if(modbus_isbusy()) {
