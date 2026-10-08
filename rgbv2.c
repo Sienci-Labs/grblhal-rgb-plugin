@@ -40,6 +40,14 @@
 #define RGB_GREY    (rgb_color_t){ .R = 127, .G = 127, .B = 127 }
 #define RGBV2_RING_LEDS 12U
 
+#ifndef DEFAULT_RGB_BRIGHTNESS
+#define DEFAULT_RGB_BRIGHTNESS 255
+#endif
+
+#if DEFAULT_RGB_BRIGHTNESS < 0 || DEFAULT_RGB_BRIGHTNESS > 255
+#error "DEFAULT_RGB_BRIGHTNESS must be between 0 and 255"
+#endif
+
 typedef enum {
     LEDStateDriven = 0,
     LEDAllWhite = 1,
@@ -69,7 +77,7 @@ static on_tool_changed_ptr on_tool_changed;
 static LED_flags_t ring_override, offboard_override;
 static rgb_color_t ring_color[RGBV2_RING_LEDS];
 static rgb_color_t offboard_color = RGB_OFF;
-static uint8_t strip_intensity = 255;
+static uint8_t strip_intensity = DEFAULT_RGB_BRIGHTNESS;
 static bool animation_active = false;
 static bool toolchange_pending = false;
 static uint8_t animation_frame = 0;
@@ -636,6 +644,8 @@ static void onProgramCompleted (program_flow_t program_flow, bool check_mode)
 static void on_startup (void *data)
 {
     (void)data;
+    if(hal.rgb0.set_intensity)
+        hal.rgb0.set_intensity(strip_intensity);
     RGBUpdateState(state_get());
 }
 
@@ -665,11 +675,6 @@ void status_light_init (void)
 
         fill_ring(RGB_OFF);
         task_run_on_startup(on_startup, NULL);
-
-#ifdef DEBUG
-        strip_intensity = 10;
-        hal.rgb0.set_intensity(strip_intensity);
-#endif
 
     } else
         task_run_on_startup(report_warning, "Status Light v2 plugin failed to initialize!");

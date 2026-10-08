@@ -94,6 +94,10 @@ For direct RGB color control (independent of state or overrides), the companion 
 
 ---
 
+## Boot brightness
+
+For `STATUS_LIGHT_ENABLE == 3`, define `DEFAULT_RGB_BRIGHTNESS` (0..255) to set strip brightness on every boot. It defaults to 255. For example, `target_compile_definitions(grblHAL PUBLIC DEFAULT_RGB_BRIGHTNESS=64)` applies the same brightness as `M356 S64`; M356 can still change it at runtime.
+
 ## License
 
 CERN-OHL-S v2 - see license header in `rgb.c` and `rgbv2.c`.
